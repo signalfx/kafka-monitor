@@ -27,7 +27,7 @@ public class SignalFxMetricsReporterServiceConfig extends AbstractConfig {
   public static final String REPORT_SIGNALFX_URL = "report.signalfx.url";
   public static final String REPORT_SIGNALFX_URL_DOC = "The url of signalfx server which SignalFxMetricsReporterService will report the metrics values.";
 
-  public static final String SIGNALFX_METRIC_DIMENSION = "metric.dimenstions";
+  public static final String SIGNALFX_METRIC_DIMENSION = "metric.dimensions";
   public static final String SIGNALFX_METRIC_DIMENSION_DOC = "Dimensions added to each metric. Example: [\"key1:value1\", \"key2:value2\"] ";
   
   public static final String SIGNALFX_TOKEN = "token";

@@ -31,7 +31,7 @@ public class SignalFxMetricsReporterServiceConfig extends AbstractConfig {
   public static final String SIGNALFX_METRIC_DIMENSION_DOC = "Dimensions added to each metric. Example: [\"key1:value1\", \"key2:value2\"] ";
   
   public static final String SIGNALFX_TOKEN = "report.signalfx.token";
-  public static final String SIGNALFX_TOKEN_DOC = "SignalFx access token";  
+  public static final String SIGNALFX_TOKEN_DOC = "SignalFx access token";
 
   static {
     CONFIG = new ConfigDef().define(REPORT_METRICS_CONFIG,
@@ -48,17 +48,12 @@ public class SignalFxMetricsReporterServiceConfig extends AbstractConfig {
                                     ConfigDef.Type.STRING,
                                     "",
                                     ConfigDef.Importance.LOW,                                    
-                                    REPORT_SIGNALFX_URL_DOC)
-                            .define(SIGNALFX_METRIC_DIMENSION,
-                                    ConfigDef.Type.LIST, 
-                                    Arrays.asList(),
-                                    ConfigDef.Importance.LOW,
-                                    SIGNALFX_METRIC_DIMENSION_DOC)
+                                    REPORT_SIGNALFX_URL_DOC)                            
                             .define(SIGNALFX_TOKEN,
                                     ConfigDef.Type.STRING,
                                     "",
                                     ConfigDef.Importance.HIGH,                                    
-                                    SIGNALFX_TOKEN_DOC);                            
+                                    SIGNALFX_TOKEN_DOC);
     
   }
 

@@ -36,52 +36,52 @@ public class SignalFxMetricsReporterService implements Service {
 
   private final String _name;
   private final List<String> _metricNames;
-  private final List<String> _dimensions;
   private final int _reportIntervalSec;
   private final ScheduledExecutorService _executor;
   private final MetricRegistry _metricRegistry;
   private final SignalFxReporter _signalfxReporter;
   private final String _signalfxUrl;
   private final String _signalfxToken;
-  
+
   private MetricMetadata _metricMetadata;
-  private Map<String, SettableDoubleGauge> _metricMap; 
+  private Map<String, SettableDoubleGauge> _metricMap;
   private Map<String, String> _dimensionsMap;
-  
+
   public SignalFxMetricsReporterService(Map<String, Object> props, String name) throws Exception {
-      
+
     SignalFxMetricsReporterServiceConfig config = new SignalFxMetricsReporterServiceConfig(props);
-    
+
     _name = name;
     _metricNames = config.getList(SignalFxMetricsReporterServiceConfig.REPORT_METRICS_CONFIG);
-    _dimensions = config.getList(SignalFxMetricsReporterServiceConfig.SIGNALFX_METRIC_DIMENSION);
     _reportIntervalSec = config.getInt(SignalFxMetricsReporterServiceConfig.REPORT_INTERVAL_SEC_CONFIG);
     _signalfxUrl = config.getString(SignalFxMetricsReporterServiceConfig.REPORT_SIGNALFX_URL);
     _signalfxToken = config.getString(SignalFxMetricsReporterServiceConfig.SIGNALFX_TOKEN);
-    
+
     if (StringUtils.isEmpty(_signalfxToken)) {
       throw new IllegalArgumentException("SignalFx token is not configured");
     }
-    
+
     _executor = Executors.newSingleThreadScheduledExecutor();
     _metricRegistry = new MetricRegistry();
     _metricMap = new HashMap<String, SettableDoubleGauge>();
     _dimensionsMap = new HashMap<String, String>();
-    setUpDimensionMap();
-    
+    if (props.containsKey(SignalFxMetricsReporterServiceConfig.SIGNALFX_METRIC_DIMENSION)) {
+      setUpDimensionMap(props.get(SignalFxMetricsReporterServiceConfig.SIGNALFX_METRIC_DIMENSION));
+    }
+
     SignalFxReporter.Builder sfxReportBuilder = new SignalFxReporter.Builder(
         _metricRegistry,
         _signalfxToken
-    );
+        );
     if (_signalfxUrl.length() > 1) {
       SignalFxEndpoint signalFxEndpoint = getSignalFxEndpoint(_signalfxUrl);
       _signalfxReporter = sfxReportBuilder.setEndpoint(signalFxEndpoint).build();
     } else {
       _signalfxReporter = sfxReportBuilder.build();
     }
-    
-    _metricMetadata = _signalfxReporter.getMetricMetadata();    
-    _signalfxReporter.start(_reportIntervalSec, TimeUnit.SECONDS);    
+
+    _metricMetadata = _signalfxReporter.getMetricMetadata();
+    _signalfxReporter.start(_reportIntervalSec, TimeUnit.SECONDS);
   }
 
   @Override
@@ -90,7 +90,7 @@ public class SignalFxMetricsReporterService implements Service {
       @Override
       public void run() {
         try {
-          captureMetrics();          
+          captureMetrics();
         } catch (Exception e) {
           LOG.error(_name + "/SignalFxMetricsReporterService failed to report metrics", e);
         }
@@ -120,23 +120,19 @@ public class SignalFxMetricsReporterService implements Service {
     }
     LOG.info("{}/SignalFxMetricsReporterService shutdown completed", _name);
   }
-  
-  private void setUpDimensionMap() {
-    if (_dimensions.size() == 0) {
-      return;
+
+  private void setUpDimensionMap(Object obj) {
+    for (Map.Entry<String, String> entry: ((Map<String, String>) obj).entrySet()) {
+      _dimensionsMap.put(entry.getKey(), entry.getValue());
     }
-    for (String dimension : _dimensions) {
-      String[] parts = dimension.split(":");
-      _dimensionsMap.put(parts[0], parts[1]);      
-    }
-  }
-  
-  private SignalFxEndpoint getSignalFxEndpoint(String urlStr) throws Exception {    
-    URL url = new URL(urlStr);
-    return new SignalFxEndpoint(url.getProtocol(), url.getHost(), url.getPort());    
   }
 
-  private String generateSignalFxMetricName(String bean, String attribute) {    
+  private SignalFxEndpoint getSignalFxEndpoint(String urlStr) throws Exception {
+    URL url = new URL(urlStr);
+    return new SignalFxEndpoint(url.getProtocol(), url.getHost(), url.getPort());
+  }
+
+  private String generateSignalFxMetricName(String bean, String attribute) {
     String service = bean.split(":")[1];
     String serviceType = service.split(",")[1].split("=")[1];
     String[] segs = {serviceType, attribute};
@@ -147,11 +143,11 @@ public class SignalFxMetricsReporterService implements Service {
     for (String metricName : _metricNames) {
       String mbeanExpr = metricName.substring(0, metricName.lastIndexOf(":"));
       String attributeExpr = metricName.substring(metricName.lastIndexOf(":") + 1);
-      
+
       List<MbeanAttributeValue> attributeValues = getMBeanAttributeValues(mbeanExpr, attributeExpr);
 
       for (final MbeanAttributeValue attributeValue : attributeValues) {
-        String metric = attributeValue.toString();        
+        String metric = attributeValue.toString();
         String key = metric.substring(0, metric.lastIndexOf("="));
         String[] parts = key.split(",");
         if (parts.length < 2) {
@@ -160,35 +156,35 @@ public class SignalFxMetricsReporterService implements Service {
         parts = parts[0].split("=");
         if (parts.length < 2 || !parts[1].contains("cluster-monitor")) {
           continue;
-        }                
+        }
         setMetricValue(attributeValue);
-      }      
+      }
     }
   }
-  
+
   private void setMetricValue(MbeanAttributeValue attributeValue) {
     String key = attributeValue.mbean() + attributeValue.attribute();
     if (!_metricMap.containsKey(key)) {
       createMetric(attributeValue);
-    }    
+    }
     _metricMap.get(key).setValue(attributeValue.value());
   }
-  
+
   private void createMetric(MbeanAttributeValue attributeValue) {
     String signalFxMetricName = generateSignalFxMetricName(attributeValue.mbean(), attributeValue.attribute());
     LOG.info("Creating metric : " + signalFxMetricName);
     SettableDoubleGauge s = _metricMetadata.forMetric(new SettableDoubleGauge())
-        .withMetricName(signalFxMetricName).metric();    
+        .withMetricName(signalFxMetricName).metric();
     for (String key : _dimensionsMap.keySet()) {
       String value = _dimensionsMap.get(key);
       _metricMetadata.forMetric(s).withDimension(key, value);
     }
-    if (signalFxMetricName.contains("partition")) {          
+    if (signalFxMetricName.contains("partition")) {
       String partitionNumber = "" + signalFxMetricName.charAt(signalFxMetricName.length() - 1);
       _metricMetadata.forMetric(s).withDimension("partition", partitionNumber);
     }
     _metricMetadata.forMetric(s).register(_metricRegistry);
     String key = attributeValue.mbean() + attributeValue.attribute();
-    _metricMap.put(key, s);    
+    _metricMap.put(key, s);
   }
 }

@@ -176,7 +176,7 @@ public class SignalFxMetricsReporterService implements Service {
       gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
           .withMetricName(signalFxMetricName).metric();
     }
-    LOG.info("Creating metric : " + signalFxMetricName);
+    LOG.info("Creating metric : {}", signalFxMetricName);
 
     for (Map.Entry<String, String> entry : _dimensionsMap.entrySet()) {
       _metricMetadata.forMetric(gauge).withDimension(entry.getKey(), entry.getValue());

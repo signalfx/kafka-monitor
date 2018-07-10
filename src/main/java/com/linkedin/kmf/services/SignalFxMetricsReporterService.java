@@ -48,7 +48,6 @@ public class SignalFxMetricsReporterService implements Service {
   private Map<String, String> _dimensionsMap;
 
   public SignalFxMetricsReporterService(Map<String, Object> props, String name) throws Exception {
-
     SignalFxMetricsReporterServiceConfig config = new SignalFxMetricsReporterServiceConfig(props);
 
     _name = name;
@@ -73,12 +72,10 @@ public class SignalFxMetricsReporterService implements Service {
         _metricRegistry,
         _signalfxToken
         );
-    if (_signalfxUrl.length() > 1) {
-      SignalFxEndpoint signalFxEndpoint = getSignalFxEndpoint(_signalfxUrl);
-      _signalfxReporter = sfxReportBuilder.setEndpoint(signalFxEndpoint).build();
-    } else {
-      _signalfxReporter = sfxReportBuilder.build();
+    if (!StringUtils.isEmpty(_signalfxUrl)) {
+      sfxReportBuilder.setEndpoint(getSignalFxEndpoint(_signalfxUrl));
     }
+    _signalfxReporter = sfxReportBuilder.build();
 
     _metricMetadata = _signalfxReporter.getMetricMetadata();
   }
@@ -129,14 +126,14 @@ public class SignalFxMetricsReporterService implements Service {
   private String generateSignalFxMetricName(String bean, String attribute) {
     String service = bean.split(":")[1];
     String serviceType = service.split(",")[1].split("=")[1];
-    String[] segs = {serviceType, attribute};
-    return StringUtils.join(segs, ".");
+    return String.format("%s.%s", serviceType, attribute);
   }
 
   private void captureMetrics() {
     for (String metricName : _metricNames) {
-      String mbeanExpr = metricName.substring(0, metricName.lastIndexOf(":"));
-      String attributeExpr = metricName.substring(metricName.lastIndexOf(":") + 1);
+      int index = metricName.lastIndexOf(':');
+      String mbeanExpr = metricName.substring(0, index);
+      String attributeExpr = metricName.substring(index + 1);
 
       List<MbeanAttributeValue> attributeValues = getMBeanAttributeValues(mbeanExpr, attributeExpr);
 

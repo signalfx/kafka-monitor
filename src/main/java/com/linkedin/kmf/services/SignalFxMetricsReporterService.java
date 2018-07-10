@@ -81,11 +81,11 @@ public class SignalFxMetricsReporterService implements Service {
     }
 
     _metricMetadata = _signalfxReporter.getMetricMetadata();
-    _signalfxReporter.start(_reportIntervalSec, TimeUnit.SECONDS);
   }
 
   @Override
   public synchronized void start() {
+    _signalfxReporter.start(_reportIntervalSec, TimeUnit.SECONDS);
     _executor.scheduleAtFixedRate(new Runnable() {
       @Override
       public void run() {

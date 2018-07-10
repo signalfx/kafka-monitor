@@ -164,27 +164,23 @@ public class SignalFxMetricsReporterService implements Service {
 
   private void setMetricValue(MbeanAttributeValue attributeValue) {
     String key = attributeValue.mbean() + attributeValue.attribute();
-    if (!_metricMap.containsKey(key)) {
-      createMetric(attributeValue);
-    }
-    _metricMap.get(key).setValue(attributeValue.value());
+    SettableDoubleGauge metric = _metricMap.computeIfAbsent(key, n -> createMetric(attributeValue));
+    metric.setValue(attributeValue.value());
   }
 
-  private void createMetric(MbeanAttributeValue attributeValue) {
+  private SettableDoubleGauge createMetric(MbeanAttributeValue attributeValue) {
     String signalFxMetricName = generateSignalFxMetricName(attributeValue.mbean(), attributeValue.attribute());
     LOG.info("Creating metric : " + signalFxMetricName);
-    SettableDoubleGauge s = _metricMetadata.forMetric(new SettableDoubleGauge())
+    SettableDoubleGauge gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
         .withMetricName(signalFxMetricName).metric();
-    for (String key : _dimensionsMap.keySet()) {
-      String value = _dimensionsMap.get(key);
-      _metricMetadata.forMetric(s).withDimension(key, value);
+    for (Map.Entry<String, String> entry : _dimensionsMap.entrySet()) {
+      _metricMetadata.forMetric(gauge).withDimension(entry.getKey(), entry.getValue());
     }
     if (signalFxMetricName.contains("partition")) {
       String partitionNumber = "" + signalFxMetricName.charAt(signalFxMetricName.length() - 1);
-      _metricMetadata.forMetric(s).withDimension("partition", partitionNumber);
+      _metricMetadata.forMetric(gauge).withDimension("partition", partitionNumber);
     }
-    _metricMetadata.forMetric(s).register(_metricRegistry);
-    String key = attributeValue.mbean() + attributeValue.attribute();
-    _metricMap.put(key, s);
+    _metricMetadata.forMetric(gauge).register(_metricRegistry);
+    return gauge;
   }
 }

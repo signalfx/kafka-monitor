@@ -48,7 +48,7 @@ public class SignalFxMetricsReporterServiceConfig extends AbstractConfig {
                                     ConfigDef.Type.STRING,
                                     "",
                                     ConfigDef.Importance.LOW,                                    
-                                    REPORT_SIGNALFX_URL_DOC)                            
+                                    REPORT_SIGNALFX_URL_DOC)
                             .define(SIGNALFX_TOKEN,
                                     ConfigDef.Type.STRING,
                                     "",

@@ -66,7 +66,7 @@ public class SignalFxMetricsReporterService implements Service {
     _metricMap = new HashMap<String, SettableDoubleGauge>();
     _dimensionsMap = new HashMap<String, String>();
     if (props.containsKey(SignalFxMetricsReporterServiceConfig.SIGNALFX_METRIC_DIMENSION)) {
-      setUpDimensionMap(props.get(SignalFxMetricsReporterServiceConfig.SIGNALFX_METRIC_DIMENSION));
+      _dimensionsMap = (Map<String, String>) props.get(SignalFxMetricsReporterServiceConfig.SIGNALFX_METRIC_DIMENSION);
     }
 
     SignalFxReporter.Builder sfxReportBuilder = new SignalFxReporter.Builder(
@@ -121,12 +121,6 @@ public class SignalFxMetricsReporterService implements Service {
     LOG.info("{}/SignalFxMetricsReporterService shutdown completed", _name);
   }
 
-  private void setUpDimensionMap(Object obj) {
-    for (Map.Entry<String, String> entry: ((Map<String, String>) obj).entrySet()) {
-      _dimensionsMap.put(entry.getKey(), entry.getValue());
-    }
-  }
-
   private SignalFxEndpoint getSignalFxEndpoint(String urlStr) throws Exception {
     URL url = new URL(urlStr);
     return new SignalFxEndpoint(url.getProtocol(), url.getHost(), url.getPort());
@@ -170,17 +164,25 @@ public class SignalFxMetricsReporterService implements Service {
 
   private SettableDoubleGauge createMetric(MbeanAttributeValue attributeValue) {
     String signalFxMetricName = generateSignalFxMetricName(attributeValue.mbean(), attributeValue.attribute());
+    SettableDoubleGauge gauge = null;
+
+    if (signalFxMetricName.contains("partition")) {
+      String partitionNumber = "" + signalFxMetricName.charAt(signalFxMetricName.length() - 1);
+      signalFxMetricName = signalFxMetricName.substring(0,  signalFxMetricName.length() - 2);
+      gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
+          .withMetricName(signalFxMetricName).metric();
+      _metricMetadata.forMetric(gauge).withDimension("partition", partitionNumber);
+    } else {
+      gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
+          .withMetricName(signalFxMetricName).metric();
+    }
     LOG.info("Creating metric : " + signalFxMetricName);
-    SettableDoubleGauge gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
-        .withMetricName(signalFxMetricName).metric();
+
     for (Map.Entry<String, String> entry : _dimensionsMap.entrySet()) {
       _metricMetadata.forMetric(gauge).withDimension(entry.getKey(), entry.getValue());
     }
-    if (signalFxMetricName.contains("partition")) {
-      String partitionNumber = "" + signalFxMetricName.charAt(signalFxMetricName.length() - 1);
-      _metricMetadata.forMetric(gauge).withDimension("partition", partitionNumber);
-    }
     _metricMetadata.forMetric(gauge).register(_metricRegistry);
+
     return gauge;
   }
 }

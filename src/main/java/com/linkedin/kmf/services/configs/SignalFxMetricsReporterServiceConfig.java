@@ -15,6 +15,10 @@ import java.util.Map;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 
+/**
+ * key/value pair used for configuring SignalFxMetricsReporterService
+ *
+ */
 public class SignalFxMetricsReporterServiceConfig extends AbstractConfig {
   private static final ConfigDef CONFIG;
 
@@ -28,8 +32,8 @@ public class SignalFxMetricsReporterServiceConfig extends AbstractConfig {
   public static final String REPORT_SIGNALFX_URL_DOC = "The url of signalfx server which SignalFxMetricsReporterService will report the metrics values.";
 
   public static final String SIGNALFX_METRIC_DIMENSION = "report.metric.dimensions";
-  public static final String SIGNALFX_METRIC_DIMENSION_DOC = "Dimensions added to each metric. Example: [\"key1:value1\", \"key2:value2\"] ";
-  
+  public static final String SIGNALFX_METRIC_DIMENSION_DOC = "Dimensions added to each metric. Example: {\"key1:value1\", \"key2:value2\"} ";
+
   public static final String SIGNALFX_TOKEN = "report.signalfx.token";
   public static final String SIGNALFX_TOKEN_DOC = "SignalFx access token";
 
@@ -39,22 +43,21 @@ public class SignalFxMetricsReporterServiceConfig extends AbstractConfig {
                                     Arrays.asList("kmf.services:*:*"),
                                     ConfigDef.Importance.MEDIUM,
                                     REPORT_METRICS_DOC)
-                            .define(REPORT_INTERVAL_SEC_CONFIG,
+                             .define(REPORT_INTERVAL_SEC_CONFIG,
                                     ConfigDef.Type.INT,
                                     1,
                                     ConfigDef.Importance.LOW,
                                     REPORT_INTERVAL_SEC_DOC)
-                            .define(REPORT_SIGNALFX_URL,
+                             .define(REPORT_SIGNALFX_URL,
                                     ConfigDef.Type.STRING,
                                     "",
-                                    ConfigDef.Importance.LOW,                                    
+                                    ConfigDef.Importance.LOW,
                                     REPORT_SIGNALFX_URL_DOC)
-                            .define(SIGNALFX_TOKEN,
+                             .define(SIGNALFX_TOKEN,
                                     ConfigDef.Type.STRING,
                                     "",
-                                    ConfigDef.Importance.HIGH,                                    
+                                    ConfigDef.Importance.HIGH,
                                     SIGNALFX_TOKEN_DOC);
-    
   }
 
   public SignalFxMetricsReporterServiceConfig(Map<?, ?> props) {

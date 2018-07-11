@@ -71,7 +71,7 @@ public class SignalFxMetricsReporterService implements Service {
     SignalFxReporter.Builder sfxReportBuilder = new SignalFxReporter.Builder(
         _metricRegistry,
         _signalfxToken
-        );
+    );
     if (!StringUtils.isEmpty(_signalfxUrl)) {
       sfxReportBuilder.setEndpoint(getSignalFxEndpoint(_signalfxUrl));
     }
@@ -155,7 +155,11 @@ public class SignalFxMetricsReporterService implements Service {
 
   private void setMetricValue(MbeanAttributeValue attributeValue) {
     String key = attributeValue.mbean() + attributeValue.attribute();
-    SettableDoubleGauge metric = _metricMap.computeIfAbsent(key, n -> createMetric(attributeValue));
+    SettableDoubleGauge metric = _metricMap.get(key);
+    if (metric == null) {
+      metric = createMetric(attributeValue);
+      _metricMap.put(key, metric);
+    }
     metric.setValue(attributeValue.value());
   }
 

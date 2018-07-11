@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2016 SignalFx, Inc. All rights reserved.
+ * Copyright (C) 2018 SignalFx, Inc. All rights reserved.
  */
 package com.linkedin.kmf.services;
 

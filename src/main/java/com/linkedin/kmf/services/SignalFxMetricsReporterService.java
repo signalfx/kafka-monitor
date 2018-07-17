@@ -162,11 +162,9 @@ public class SignalFxMetricsReporterService implements Service {
     SettableDoubleGauge gauge = null;
 
     if (signalFxMetricName.contains("partition")) {
-      String partitionNumber = "" + signalFxMetricName.charAt(signalFxMetricName.length() - 1);
-      signalFxMetricName = signalFxMetricName.substring(0,  signalFxMetricName.length() - 2);
-      gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
-          .withMetricName(signalFxMetricName).metric();
-      _metricMetadata.forMetric(gauge).withDimension("partition", partitionNumber);
+      gauge = createPartitionMetric(signalFxMetricName);
+    } else if (signalFxMetricName.contains("delay-ms-avg-broker")) {
+      gauge = createBrokerMetric(signalFxMetricName);
     } else {
       gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
           .withMetricName(signalFxMetricName).metric();
@@ -177,7 +175,24 @@ public class SignalFxMetricsReporterService implements Service {
       _metricMetadata.forMetric(gauge).withDimension(entry.getKey(), entry.getValue());
     }
     _metricMetadata.forMetric(gauge).register(_metricRegistry);
+    return gauge;
+  }
 
+  private SettableDoubleGauge createBrokerMetric(String signalFxMetricName) {
+    String metricPart = "consume-service.delay-ms-avg-broker";
+    String brokerUrl = signalFxMetricName.split("broker-")[1];
+    SettableDoubleGauge gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
+        .withMetricName(metricPart).metric();
+    _metricMetadata.forMetric(gauge).withDimension("broker", brokerUrl);
+    return gauge;
+  }
+
+  private SettableDoubleGauge createPartitionMetric(String signalFxMetricName) {
+    String partitionNumber = "" + signalFxMetricName.charAt(signalFxMetricName.length() - 1);
+    signalFxMetricName = signalFxMetricName.substring(0,  signalFxMetricName.length() - 2);
+    SettableDoubleGauge gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
+        .withMetricName(signalFxMetricName).metric();
+    _metricMetadata.forMetric(gauge).withDimension("partition", partitionNumber);
     return gauge;
   }
 }

@@ -360,8 +360,9 @@ public class ConsumeService implements Service {
   private class HandlePartitionLeaderInfoThreadFactory implements ThreadFactory {
     @Override
     public Thread newThread(Runnable r) {
-      return new Thread(r, _name + "-consume-service--partition-leader-handler");
+      return new Thread(r, _name + "-consume-service-partition-leader-handler");
     }
   }
 
 }
+

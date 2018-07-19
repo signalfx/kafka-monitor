@@ -11,13 +11,15 @@ package com.linkedin.kmf.services;
 
 import java.util.ArrayList;
 import java.util.List;
-import kafka.cluster.Broker;
+
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.testng.Assert;
 import org.testng.annotations.Test;
+
 import com.linkedin.kmf.services.MultiClusterTopicManagementService.TopicManagementHelper;
+
+import kafka.cluster.Broker;
 
 @Test
 public class TopicManagementServiceTest {
@@ -27,7 +29,7 @@ public class TopicManagementServiceTest {
   private List<Broker> brokers(int brokerCount) {
     List<Broker> brokers = new ArrayList<>();
     for (int i = 0; i < brokerCount; i++) {
-      brokers.add(new Broker(i, "", -1, null, SecurityProtocol.PLAINTEXT));
+      brokers.add(new Broker(i, "", -1, null));
     }
     return brokers;
   }

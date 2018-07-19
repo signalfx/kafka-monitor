@@ -10,16 +10,14 @@
 
 package com.linkedin.kmf.services;
 
-import com.linkedin.kmf.common.Utils;
-import com.linkedin.kmf.services.configs.CommonServiceConfig;
-import com.linkedin.kmf.services.configs.MultiClusterTopicManagementServiceConfig;
-import com.linkedin.kmf.services.configs.TopicManagementServiceConfig;
-import com.linkedin.kmf.topicfactory.TopicFactory;
+import static com.linkedin.kmf.common.Utils.ZK_CONNECTION_TIMEOUT_MS;
+import static com.linkedin.kmf.common.Utils.ZK_SESSION_TIMEOUT_MS;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -28,16 +26,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import kafka.admin.AdminOperationException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import kafka.admin.AdminUtils;
-import kafka.admin.BrokerMetadata;
-import kafka.admin.PreferredReplicaLeaderElectionCommand;
-import kafka.admin.RackAwareMode;
-import kafka.cluster.Broker;
-import kafka.common.TopicAndPartition;
-import kafka.server.ConfigType;
-import kafka.utils.ZkUtils;
+
 import org.I0Itec.zkclient.exception.ZkNodeExistsException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -45,10 +35,23 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.JaasUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.collection.Seq;
 
-import static com.linkedin.kmf.common.Utils.ZK_CONNECTION_TIMEOUT_MS;
-import static com.linkedin.kmf.common.Utils.ZK_SESSION_TIMEOUT_MS;
+import com.linkedin.kmf.common.Utils;
+import com.linkedin.kmf.services.configs.CommonServiceConfig;
+import com.linkedin.kmf.services.configs.MultiClusterTopicManagementServiceConfig;
+import com.linkedin.kmf.services.configs.TopicManagementServiceConfig;
+import com.linkedin.kmf.topicfactory.TopicFactory;
+
+import kafka.admin.AdminOperationException;
+import kafka.admin.AdminUtils;
+import kafka.admin.PreferredReplicaLeaderElectionCommand;
+import kafka.cluster.Broker;
+import kafka.common.TopicAndPartition;
+import kafka.server.BrokerMetadata;
+import kafka.server.ConfigType;
+import kafka.utils.ZkUtils;
+import scala.collection.Seq;
+import scala.collection.mutable.ArrayBuffer;
 
 /**
  * This service periodically checks and rebalances the monitor topics across a pipeline of Kafka clusters so that
@@ -224,7 +227,7 @@ public class MultiClusterTopicManagementService implements Service {
         if (partitionNum < minPartitionNum) {
           LOG.info("MultiClusterTopicManagementService will increase partition of the topic {} "
               + "in cluster {} from {} to {}.", _topic, _zkConnect, partitionNum, minPartitionNum);
-          AdminUtils.addPartitions(zkUtils, _topic, minPartitionNum, null, false, RackAwareMode.Enforced$.MODULE$);
+          AdminUtils.addPartitions(zkUtils, _topic, minPartitionNum, "", false);
         }
       } finally {
         zkUtils.close();
@@ -294,9 +297,9 @@ public class MultiClusterTopicManagementService implements Service {
     }
 
     private static void reassignPartitions(ZkUtils zkUtils, Collection<Broker> brokers, String topic, int partitionCount, int replicationFactor) {
-      scala.collection.mutable.ArrayBuffer<BrokerMetadata> brokersMetadata = new scala.collection.mutable.ArrayBuffer<>(brokers.size());
+      Seq<Object> brokersMetadata = new scala.collection.mutable.ArrayBuffer<>(brokers.size());
       for (Broker broker : brokers) {
-        brokersMetadata.$plus$eq(new BrokerMetadata(broker.id(), broker.rack()));
+        ((ArrayBuffer<Object>) brokersMetadata).$plus$eq(new BrokerMetadata(broker.id()));
       }
       scala.collection.Map<Object, Seq<Object>> newAssignment =
           AdminUtils.assignReplicasToBrokers(brokersMetadata, partitionCount, replicationFactor, 0, 0);

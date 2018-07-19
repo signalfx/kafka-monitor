@@ -19,26 +19,26 @@ import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.Set;
 
-import kafka.admin.AdminUtils;
-import kafka.admin.RackAwareMode;
-import kafka.server.KafkaConfig;
-import kafka.utils.ZkUtils;
+import javax.management.MBeanAttributeInfo;
+import javax.management.MBeanInfo;
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericDatumWriter;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.io.Encoder;
 import org.apache.avro.io.JsonEncoder;
-import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.security.JaasUtils;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.collection.Seq;
 
-import javax.management.MBeanAttributeInfo;
-import javax.management.MBeanInfo;
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
+import kafka.admin.AdminUtils;
+import kafka.common.TopicExistsException;
+import kafka.server.KafkaConfig;
+import kafka.utils.ZkUtils;
+import scala.collection.Seq;
 
 
 /**
@@ -94,7 +94,7 @@ public class Utils {
       int partitionCount = Math.max((int) Math.ceil(brokerCount * partitionToBrokerRatio), minPartitionNum);
 
       try {
-        AdminUtils.createTopic(zkUtils, topic, partitionCount, replicationFactor, topicConfig, RackAwareMode.Enforced$.MODULE$);
+        AdminUtils.createTopic(zkUtils, topic, partitionCount, replicationFactor, topicConfig);
       } catch (TopicExistsException e) {
         //There is a race condition with the consumer.
         LOG.debug("Monitoring topic " + topic + " already exists in cluster " + zkUrl, e);

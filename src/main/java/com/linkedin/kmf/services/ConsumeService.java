@@ -79,6 +79,7 @@ public class ConsumeService implements Service {
   private final int _latencySlaMs;
   private final String _zkConnect;
   private final String _topic;
+  private final int _intervalPartitionLeaderExecutor;
   private final ScheduledExecutorService _handlePartitionLeaderInfoExecutor;
   private final Map<Integer, Broker> _partitionToBroker;
 
@@ -94,6 +95,7 @@ public class ConsumeService implements Service {
     _latencySlaMs = config.getInt(ConsumeServiceConfig.LATENCY_SLA_MS_CONFIG);
     _latencyPercentileMaxMs = config.getInt(ConsumeServiceConfig.LATENCY_PERCENTILE_MAX_MS_CONFIG);
     _latencyPercentileGranularityMs = config.getInt(ConsumeServiceConfig.LATENCY_PERCENTILE_GRANULARITY_MS_CONFIG);
+    _intervalPartitionLeaderExecutor = config.getInt(ConsumeServiceConfig.PARTITION_TO_LEADER_REFRESH_INTERVAL_MS_CONFIG);
     _running = new AtomicBoolean(false);
     _partitionToBroker = new ConcurrentHashMap<>();
 
@@ -210,10 +212,8 @@ public class ConsumeService implements Service {
       Collection<EndPoint> endPoints = scala.collection.JavaConversions.asJavaCollection(broker.endPoints());
       for (EndPoint endpoint : endPoints) {
         String brokerUrl = endpoint.host() + ":" + endpoint.port();
-        if (!_sensors._delayPerBroker.containsKey(brokerUrl)) {
-          _sensors.addBrokerSensors(brokerUrl);
-        }
-        _sensors._delayPerBroker.get(brokerUrl).record(currMs - prevMs);
+        Sensor delay = _sensors.getOrCreateBrokerSensor(brokerUrl);
+        delay.record(currMs - prevMs);
       }
     }
   }
@@ -222,7 +222,7 @@ public class ConsumeService implements Service {
   public synchronized void start() {
     if (_running.compareAndSet(false, true)) {
       _thread.start();
-      _handlePartitionLeaderInfoExecutor.scheduleWithFixedDelay(new PartitionLeaderInfoHandler(), 1000, 10000, TimeUnit.MILLISECONDS);
+      _handlePartitionLeaderInfoExecutor.scheduleWithFixedDelay(new PartitionLeaderInfoHandler(), 1000, _intervalPartitionLeaderExecutor, TimeUnit.MILLISECONDS);
       LOG.info("{}/ConsumeService started", _name);
     }
   }
@@ -250,7 +250,7 @@ public class ConsumeService implements Service {
   }
 
   /**
-   * This should be periodically run to check for addition or removal of brokers.
+   * This should be periodically run to check for partition leadership assignments.
    */
   private class PartitionLeaderInfoHandler implements Runnable {
 
@@ -276,7 +276,7 @@ public class ConsumeService implements Service {
     private final Sensor _bytesConsumed;
     private final Sensor _consumeError;
     private final ConcurrentMap<String, Sensor> _delayPerBroker;
-    public final Metrics metrics;
+    private final Metrics _metrics;
     private final Sensor _recordsConsumed;
     private final Sensor _recordsDuplicated;
     private final Sensor _recordsLost;
@@ -285,7 +285,7 @@ public class ConsumeService implements Service {
     private final Map<String, String> _tags;
 
     public ConsumeMetrics(final Metrics metrics, final Map<String, String> tags) {
-      this.metrics = metrics;
+      this._metrics = metrics;
       this._tags = tags;
 
       _delayPerBroker = new ConcurrentHashMap<>();
@@ -346,14 +346,15 @@ public class ConsumeService implements Service {
       );
     }
 
-    void addBrokerSensors(String endpoint) {
+    Sensor getOrCreateBrokerSensor(String endpoint) {
       if (_delayPerBroker.containsKey(endpoint)) {
-        return;
+        return _delayPerBroker.get(endpoint);
       }
-      Sensor delayBrokerSensor = metrics.sensor("delay-broker-" + endpoint);
+      Sensor delayBrokerSensor = _metrics.sensor("delay-broker-" + endpoint);
       delayBrokerSensor.add(new MetricName("delay-ms-avg-broker-" + endpoint, METRIC_GROUP_NAME,
           "The average latency of records from producer to consumer for broker", _tags),  new Avg());
       _delayPerBroker.put(endpoint, delayBrokerSensor);
+      return delayBrokerSensor;
     }
   }
 

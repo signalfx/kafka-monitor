@@ -188,8 +188,9 @@ public class SignalFxMetricsReporterService implements Service {
   }
 
   private SettableDoubleGauge createPartitionMetric(String signalFxMetricName) {
-    String partitionNumber = "" + signalFxMetricName.charAt(signalFxMetricName.length() - 1);
-    signalFxMetricName = signalFxMetricName.substring(0,  signalFxMetricName.length() - 2);
+    int divider = signalFxMetricName.lastIndexOf('-');
+    String partitionNumber = signalFxMetricName.substring(divider + 1);
+    signalFxMetricName = signalFxMetricName.substring(0,  divider);
     SettableDoubleGauge gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
         .withMetricName(signalFxMetricName).metric();
     _metricMetadata.forMetric(gauge).withDimension("partition", partitionNumber);

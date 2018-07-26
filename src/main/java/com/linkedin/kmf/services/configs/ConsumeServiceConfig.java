@@ -9,12 +9,10 @@
  */
 package com.linkedin.kmf.services.configs;
 
+import com.linkedin.kmf.consumer.NewConsumer;
 import java.util.Map;
-
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-
-import com.linkedin.kmf.consumer.NewConsumer;
 
 public class ConsumeServiceConfig extends AbstractConfig {
 

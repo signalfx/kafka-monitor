@@ -12,7 +12,13 @@ package com.linkedin.kmf.services;
 
 import static com.linkedin.kmf.common.Utils.ZK_CONNECTION_TIMEOUT_MS;
 import static com.linkedin.kmf.common.Utils.ZK_SESSION_TIMEOUT_MS;
-
+import com.linkedin.kmf.common.DefaultTopicSchema;
+import com.linkedin.kmf.common.Utils;
+import com.linkedin.kmf.consumer.BaseConsumerRecord;
+import com.linkedin.kmf.consumer.KMBaseConsumer;
+import com.linkedin.kmf.consumer.NewConsumer;
+import com.linkedin.kmf.consumer.OldConsumer;
+import com.linkedin.kmf.services.configs.ConsumeServiceConfig;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -27,7 +33,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.MetricName;
@@ -49,15 +54,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.linkedin.kmf.common.DefaultTopicSchema;
-import com.linkedin.kmf.common.Utils;
-import com.linkedin.kmf.consumer.BaseConsumerRecord;
-import com.linkedin.kmf.consumer.KMBaseConsumer;
-import com.linkedin.kmf.consumer.NewConsumer;
-import com.linkedin.kmf.consumer.OldConsumer;
-import com.linkedin.kmf.services.configs.ConsumeServiceConfig;
-
 import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
 import kafka.utils.ZkUtils;

@@ -24,6 +24,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.MetricName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
@@ -81,7 +82,7 @@ public class KafkaMonitor {
     List<MetricsReporter> reporters = new ArrayList<>();
     reporters.add(new JmxReporter(JMX_PREFIX));
     Metrics metrics = new Metrics(new MetricConfig(), reporters, new SystemTime());
-    metrics.addMetric(metrics.metricName("offline-runnable-count", METRIC_GROUP_NAME, "The number of Service/App that are not fully running"),
+    metrics.addMetric(new MetricName("offline-runnable-count", METRIC_GROUP_NAME, "The number of Service/App that are not fully running"),
         new Measurable() {
           @Override
           public double measure(MetricConfig config, long now) {

@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit;
 import kafka.admin.AdminOperationException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import kafka.admin.AdminUtils;
-import kafka.admin.BrokerMetadata;
+import kafka.server.BrokerMetadata;
 import kafka.admin.PreferredReplicaLeaderElectionCommand;
 import kafka.cluster.Broker;
 import kafka.common.TopicAndPartition;
@@ -45,6 +45,7 @@ import org.apache.kafka.common.security.JaasUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.collection.Seq;
+import scala.collection.mutable.ArrayBuffer;
 
 import static com.linkedin.kmf.common.Utils.ZK_CONNECTION_TIMEOUT_MS;
 import static com.linkedin.kmf.common.Utils.ZK_SESSION_TIMEOUT_MS;
@@ -225,9 +226,7 @@ public class MultiClusterTopicManagementService implements Service {
         if (partitionNum < minPartitionNum) {
           LOG.info("MultiClusterTopicManagementService will increase partition of the topic {} "
               + "in cluster {} from {} to {}.", _topic, _zkConnect, partitionNum, minPartitionNum);
-
-          scala.Option<scala.collection.Map<java.lang.Object, scala.collection.Seq<java.lang.Object>>> replicaAssignment = scala.Option.apply(null);
-          AdminUtils.addPartitions(zkUtils, _topic, existingAssignment, getAllBrokers(zkUtils), minPartitionNum, replicaAssignment, false);
+          AdminUtils.addPartitions(zkUtils, _topic, minPartitionNum, "", false);
         }
       } finally {
         zkUtils.close();
@@ -297,9 +296,9 @@ public class MultiClusterTopicManagementService implements Service {
     }
 
     private static void reassignPartitions(ZkUtils zkUtils, Collection<Broker> brokers, String topic, int partitionCount, int replicationFactor) {
-      scala.collection.mutable.ArrayBuffer<BrokerMetadata> brokersMetadata = new scala.collection.mutable.ArrayBuffer<>(brokers.size());
+      Seq<Object> brokersMetadata = new scala.collection.mutable.ArrayBuffer<>(brokers.size());
       for (Broker broker : brokers) {
-        brokersMetadata.$plus$eq(new BrokerMetadata(broker.id(), broker.rack()));
+        ((ArrayBuffer<Object>) brokersMetadata).$plus$eq(new BrokerMetadata(broker.id()));
       }
       scala.collection.Map<Object, Seq<Object>> newAssignment =
           AdminUtils.assignReplicasToBrokers(brokersMetadata, partitionCount, replicationFactor, 0, 0);
@@ -320,7 +319,7 @@ public class MultiClusterTopicManagementService implements Service {
       Collection<Broker> brokers = scala.collection.JavaConversions.asJavaCollection(zkUtils.getAllBrokersInCluster());
       scala.collection.mutable.ArrayBuffer<BrokerMetadata> brokersMetadata = new scala.collection.mutable.ArrayBuffer<>(brokers.size());
       for (Broker broker : brokers) {
-        brokersMetadata.$plus$eq(new BrokerMetadata(broker.id(), broker.rack()));
+        brokersMetadata.$plus$eq(new BrokerMetadata(broker.id()));
       }
       return brokersMetadata;
     }

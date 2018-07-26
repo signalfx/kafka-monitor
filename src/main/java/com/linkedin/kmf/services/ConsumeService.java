@@ -9,6 +9,13 @@
  */
 package com.linkedin.kmf.services;
 
+import com.linkedin.kmf.common.DefaultTopicSchema;
+import com.linkedin.kmf.common.Utils;
+import com.linkedin.kmf.consumer.BaseConsumerRecord;
+import com.linkedin.kmf.consumer.KMBaseConsumer;
+import com.linkedin.kmf.consumer.NewConsumer;
+import com.linkedin.kmf.consumer.OldConsumer;
+import com.linkedin.kmf.services.configs.ConsumeServiceConfig;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,7 +24,6 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.MetricName;
@@ -38,14 +44,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.linkedin.kmf.common.DefaultTopicSchema;
-import com.linkedin.kmf.common.Utils;
-import com.linkedin.kmf.consumer.BaseConsumerRecord;
-import com.linkedin.kmf.consumer.KMBaseConsumer;
-import com.linkedin.kmf.consumer.NewConsumer;
-import com.linkedin.kmf.consumer.OldConsumer;
-import com.linkedin.kmf.services.configs.ConsumeServiceConfig;
 
 public class ConsumeService implements Service {
   private static final Logger LOG = LoggerFactory.getLogger(ConsumeService.class);

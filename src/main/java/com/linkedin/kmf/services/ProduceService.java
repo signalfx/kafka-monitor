@@ -9,6 +9,12 @@
  */
 package com.linkedin.kmf.services;
 
+import com.linkedin.kmf.common.Utils;
+import com.linkedin.kmf.partitioner.KMPartitioner;
+import com.linkedin.kmf.producer.BaseProducerRecord;
+import com.linkedin.kmf.producer.KMBaseProducer;
+import com.linkedin.kmf.producer.NewProducer;
+import com.linkedin.kmf.services.configs.ProduceServiceConfig;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -23,7 +29,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.MetricName;
@@ -43,13 +48,6 @@ import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.linkedin.kmf.common.Utils;
-import com.linkedin.kmf.partitioner.KMPartitioner;
-import com.linkedin.kmf.producer.BaseProducerRecord;
-import com.linkedin.kmf.producer.KMBaseProducer;
-import com.linkedin.kmf.producer.NewProducer;
-import com.linkedin.kmf.services.configs.ProduceServiceConfig;
 
 public class ProduceService implements Service {
   private static final Logger LOG = LoggerFactory.getLogger(ProduceService.class);
@@ -313,7 +311,6 @@ public class ProduceService implements Service {
       _key = key;
     }
 
-    @Override
     public void run() {
       try {
         long nextIndex = _nextIndexPerPartition.get(_partition).get();
@@ -346,7 +343,6 @@ public class ProduceService implements Service {
    */
   private class NewPartitionHandler implements Runnable {
 
-    @Override
     public void run() {
       LOG.debug("{}/ProduceService check partition number for topic {}.", _name, _topic);
 
@@ -381,14 +377,12 @@ public class ProduceService implements Service {
   private class ProduceServiceThreadFactory implements ThreadFactory {
 
     private final AtomicInteger _threadId = new AtomicInteger();
-    @Override
     public Thread newThread(Runnable r) {
       return new Thread(r, _name + "-produce-service-" + _threadId.getAndIncrement());
     }
   }
 
   private class HandleNewPartitionsThreadFactory implements ThreadFactory {
-    @Override
     public Thread newThread(Runnable r) {
       return new Thread(r, _name + "-produce-service-new-partition-handler");
     }

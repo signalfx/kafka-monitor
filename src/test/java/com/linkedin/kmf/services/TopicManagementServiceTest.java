@@ -11,15 +11,12 @@ package com.linkedin.kmf.services;
 
 import java.util.ArrayList;
 import java.util.List;
-
+import kafka.cluster.Broker;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.testng.Assert;
 import org.testng.annotations.Test;
-
 import com.linkedin.kmf.services.MultiClusterTopicManagementService.TopicManagementHelper;
-
-import kafka.cluster.Broker;
 
 @Test
 public class TopicManagementServiceTest {

@@ -9,6 +9,9 @@
  */
 package com.linkedin.kmf.services;
 
+
+import static com.linkedin.kmf.common.Utils.ZK_CONNECTION_TIMEOUT_MS;
+import static com.linkedin.kmf.common.Utils.ZK_SESSION_TIMEOUT_MS;
 import com.linkedin.kmf.common.DefaultTopicSchema;
 import com.linkedin.kmf.common.Utils;
 import com.linkedin.kmf.consumer.BaseConsumerRecord;
@@ -17,11 +20,17 @@ import com.linkedin.kmf.consumer.NewConsumer;
 import com.linkedin.kmf.consumer.OldConsumer;
 import com.linkedin.kmf.services.configs.ConsumeServiceConfig;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.avro.generic.GenericRecord;
@@ -40,10 +49,14 @@ import org.apache.kafka.common.metrics.stats.Percentile;
 import org.apache.kafka.common.metrics.stats.Percentiles;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
+import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import kafka.cluster.Broker;
+import kafka.cluster.EndPoint;
+import kafka.utils.ZkUtils;
 
 public class ConsumeService implements Service {
   private static final Logger LOG = LoggerFactory.getLogger(ConsumeService.class);
@@ -60,26 +73,35 @@ public class ConsumeService implements Service {
   private final int _latencyPercentileGranularityMs;
   private final AtomicBoolean _running;
   private final int _latencySlaMs;
+  private final String _zkConnect;
+  private final String _topic;
+  private final int _intervalPartitionLeaderExecutor;
+  private final ScheduledExecutorService _handlePartitionLeaderInfoExecutor;
+  private final Map<Integer, Broker> _partitionToBroker;
 
   public ConsumeService(Map<String, Object> props, String name) throws Exception {
     _name = name;
     Map consumerPropsOverride = props.containsKey(ConsumeServiceConfig.CONSUMER_PROPS_CONFIG)
       ? (Map) props.get(ConsumeServiceConfig.CONSUMER_PROPS_CONFIG) : new HashMap<>();
     ConsumeServiceConfig config = new ConsumeServiceConfig(props);
-    String topic = config.getString(ConsumeServiceConfig.TOPIC_CONFIG);
-    String zkConnect = config.getString(ConsumeServiceConfig.ZOOKEEPER_CONNECT_CONFIG);
+    _topic = config.getString(ConsumeServiceConfig.TOPIC_CONFIG);
+    _zkConnect = config.getString(ConsumeServiceConfig.ZOOKEEPER_CONNECT_CONFIG);
     String brokerList = config.getString(ConsumeServiceConfig.BOOTSTRAP_SERVERS_CONFIG);
     String consumerClassName = config.getString(ConsumeServiceConfig.CONSUMER_CLASS_CONFIG);
     _latencySlaMs = config.getInt(ConsumeServiceConfig.LATENCY_SLA_MS_CONFIG);
     _latencyPercentileMaxMs = config.getInt(ConsumeServiceConfig.LATENCY_PERCENTILE_MAX_MS_CONFIG);
     _latencyPercentileGranularityMs = config.getInt(ConsumeServiceConfig.LATENCY_PERCENTILE_GRANULARITY_MS_CONFIG);
+    _intervalPartitionLeaderExecutor = config.getInt(ConsumeServiceConfig.PARTITION_TO_LEADER_REFRESH_INTERVAL_MS_CONFIG);
     _running = new AtomicBoolean(false);
+    _partitionToBroker = new ConcurrentHashMap<>();
 
     for (String property: NONOVERRIDABLE_PROPERTIES) {
       if (consumerPropsOverride.containsKey(property)) {
         throw new ConfigException("Override must not contain " + property + " config.");
       }
     }
+
+    _handlePartitionLeaderInfoExecutor = Executors.newSingleThreadScheduledExecutor(new HandlePartitionLeaderInfoThreadFactory());
 
     Properties consumerProps = new Properties();
 
@@ -102,12 +124,12 @@ public class ConsumeService implements Service {
 
     // Assign config specified for ConsumeService.
     consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList);
-    consumerProps.put("zookeeper.connect", zkConnect);
+    consumerProps.put("zookeeper.connect", _zkConnect);
 
     // Assign config specified for consumer. This has the highest priority.
     consumerProps.putAll(consumerPropsOverride);
 
-    _consumer = (KMBaseConsumer) Class.forName(consumerClassName).getConstructor(String.class, Properties.class).newInstance(topic, consumerProps);
+    _consumer = (KMBaseConsumer) Class.forName(consumerClassName).getConstructor(String.class, Properties.class).newInstance(_topic, consumerProps);
 
     _thread = new Thread(new Runnable() {
       @Override
@@ -181,6 +203,14 @@ public class ConsumeService implements Service {
         nextIndexes.put(partition, index + 1);
         _sensors._recordsLost.record(index - nextIndex);
       }
+
+      Broker broker = _partitionToBroker.get(partition);
+      Collection<EndPoint> endPoints = scala.collection.JavaConversions.asJavaCollection(broker.endPoints());
+      for (EndPoint endpoint : endPoints) {
+        String brokerUrl = endpoint.host() + ":" + endpoint.port();
+        Sensor delay = _sensors.getOrCreateBrokerSensor(brokerUrl);
+        delay.record(currMs - prevMs);
+      }
     }
   }
 
@@ -188,6 +218,7 @@ public class ConsumeService implements Service {
   public synchronized void start() {
     if (_running.compareAndSet(false, true)) {
       _thread.start();
+      _handlePartitionLeaderInfoExecutor.scheduleWithFixedDelay(new PartitionLeaderInfoHandler(), 1000, _intervalPartitionLeaderExecutor, TimeUnit.MILLISECONDS);
       LOG.info("{}/ConsumeService started", _name);
     }
   }
@@ -196,6 +227,7 @@ public class ConsumeService implements Service {
   public synchronized void stop() {
     if (_running.compareAndSet(true, false)) {
       try {
+        _handlePartitionLeaderInfoExecutor.shutdown();
         _consumer.close();
       } catch (Exception e) {
         LOG.warn(_name + "/ConsumeService while trying to close consumer.", e);
@@ -214,16 +246,47 @@ public class ConsumeService implements Service {
     return _running.get() && _thread.isAlive();
   }
 
+  /**
+   * This should be periodically run to check for partition leadership assignments.
+   */
+  private class PartitionLeaderInfoHandler implements Runnable {
+
+    @Override
+    public void run() {
+      ZkUtils zkUtils = ZkUtils.apply(_zkConnect, ZK_SESSION_TIMEOUT_MS, ZK_CONNECTION_TIMEOUT_MS, JaasUtils.isZkSecurityEnabled());
+      scala.collection.mutable.ArrayBuffer<String> topicList = new scala.collection.mutable.ArrayBuffer<>();
+      topicList.$plus$eq(_topic);
+      scala.collection.Map<Object, scala.collection.Seq<Object>> partitionAssignments =
+          zkUtils.getPartitionAssignmentForTopics(topicList).apply(_topic);
+      scala.collection.Iterator<scala.Tuple2<Object, scala.collection.Seq<Object>>> it = partitionAssignments.iterator();
+      while (it.hasNext()) {
+        scala.Tuple2<Object, scala.collection.Seq<Object>> scalaTuple = it.next();
+        Integer partition = (Integer) scalaTuple._1();
+        scala.Option<Object> leaderOption = zkUtils.getLeaderForPartition(_topic, partition);
+        Broker broker = zkUtils.getBrokerInfo((Integer) leaderOption.get()).get();
+        _partitionToBroker.put(partition, broker);
+      }
+    }
+  }
+
   private class ConsumeMetrics {
     private final Sensor _bytesConsumed;
     private final Sensor _consumeError;
+    private final ConcurrentMap<String, Sensor> _delayPerBroker;
+    private final Metrics _metrics;
     private final Sensor _recordsConsumed;
     private final Sensor _recordsDuplicated;
     private final Sensor _recordsLost;
     private final Sensor _recordsDelay;
     private final Sensor _recordsDelayed;
+    private final Map<String, String> _tags;
 
     public ConsumeMetrics(final Metrics metrics, final Map<String, String> tags) {
+      this._metrics = metrics;
+      this._tags = tags;
+
+      _delayPerBroker = new ConcurrentHashMap<>();
+
       _bytesConsumed = metrics.sensor("bytes-consumed");
       _bytesConsumed.add(new MetricName("bytes-consumed-rate", METRIC_GROUP_NAME, "The average number of bytes per second that are consumed", tags), new Rate());
 
@@ -280,6 +343,24 @@ public class ConsumeService implements Service {
       );
     }
 
+    Sensor getOrCreateBrokerSensor(String endpoint) {
+      if (_delayPerBroker.containsKey(endpoint)) {
+        return _delayPerBroker.get(endpoint);
+      }
+      Sensor delayBrokerSensor = _metrics.sensor("delay-broker-" + endpoint);
+      delayBrokerSensor.add(new MetricName("delay-ms-avg-broker-" + endpoint, METRIC_GROUP_NAME,
+          "The average latency of records from producer to consumer for broker", _tags),  new Avg());
+      _delayPerBroker.put(endpoint, delayBrokerSensor);
+      return delayBrokerSensor;
+    }
+  }
+
+  private class HandlePartitionLeaderInfoThreadFactory implements ThreadFactory {
+    @Override
+    public Thread newThread(Runnable r) {
+      return new Thread(r, _name + "-consume-service-partition-leader-handler");
+    }
   }
 
 }
+

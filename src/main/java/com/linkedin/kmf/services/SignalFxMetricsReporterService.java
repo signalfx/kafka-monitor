@@ -4,19 +4,6 @@
 package com.linkedin.kmf.services;
 
 import static com.linkedin.kmf.common.Utils.getMBeanAttributeValues;
-
-import java.net.URL;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-
-import org.apache.commons.lang.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.codahale.metrics.MetricRegistry;
 import com.linkedin.kmf.common.MbeanAttributeValue;
 import com.linkedin.kmf.services.configs.SignalFxMetricsReporterServiceConfig;
@@ -24,6 +11,16 @@ import com.signalfx.codahale.metrics.SettableDoubleGauge;
 import com.signalfx.codahale.reporter.MetricMetadata;
 import com.signalfx.codahale.reporter.SignalFxReporter;
 import com.signalfx.endpoint.SignalFxEndpoint;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import org.apache.commons.lang.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SignalFxMetricsReporterService implements Service {
   private static final Logger LOG = LoggerFactory.getLogger(SignalFxMetricsReporterService.class);
@@ -142,6 +139,9 @@ public class SignalFxMetricsReporterService implements Service {
         if (parts.length < 2 || !parts[1].contains("cluster-monitor")) {
           continue;
         }
+        if (metric.contains("broker")) {
+          LOG.info("Metric : {}", attributeValue.toString());
+        }
         setMetricValue(attributeValue);
       }
     }
@@ -162,11 +162,9 @@ public class SignalFxMetricsReporterService implements Service {
     SettableDoubleGauge gauge = null;
 
     if (signalFxMetricName.contains("partition")) {
-      String partitionNumber = "" + signalFxMetricName.charAt(signalFxMetricName.length() - 1);
-      signalFxMetricName = signalFxMetricName.substring(0,  signalFxMetricName.length() - 2);
-      gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
-          .withMetricName(signalFxMetricName).metric();
-      _metricMetadata.forMetric(gauge).withDimension("partition", partitionNumber);
+      gauge = createPartitionMetric(signalFxMetricName);
+    } else if (signalFxMetricName.contains("delay-ms-avg-broker")) {
+      gauge = createBrokerMetric(signalFxMetricName);
     } else {
       gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
           .withMetricName(signalFxMetricName).metric();
@@ -178,6 +176,25 @@ public class SignalFxMetricsReporterService implements Service {
     }
     _metricMetadata.forMetric(gauge).register(_metricRegistry);
 
+    return gauge;
+  }
+
+  private SettableDoubleGauge createBrokerMetric(String signalFxMetricName) {
+    String metricPart = "consume-service.delay-ms-avg-broker";
+    String brokerUrl = signalFxMetricName.split("broker-")[1];
+    SettableDoubleGauge gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
+        .withMetricName(metricPart).metric();
+    _metricMetadata.forMetric(gauge).withDimension("broker", brokerUrl);
+    return gauge;
+  }
+
+  private SettableDoubleGauge createPartitionMetric(String signalFxMetricName) {
+    int divider = signalFxMetricName.lastIndexOf('-');
+    String partitionNumber = signalFxMetricName.substring(divider + 1);
+    signalFxMetricName = signalFxMetricName.substring(0,  divider);
+    SettableDoubleGauge gauge = _metricMetadata.forMetric(new SettableDoubleGauge())
+        .withMetricName(signalFxMetricName).metric();
+    _metricMetadata.forMetric(gauge).withDimension("partition", partitionNumber);
     return gauge;
   }
 }

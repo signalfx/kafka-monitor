@@ -46,6 +46,9 @@ public class ConsumeServiceConfig extends AbstractConfig {
   public static final String LATENCY_SLA_MS_DOC = "The maximum latency of message delivery under SLA. Consume availability is measured "
                                                   + "as the fraction of messages that are either lost or whose delivery latency exceeds this value";
 
+  public static final String PARTITION_TO_LEADER_REFRESH_INTERVAL_MS_CONFIG = "consume.partitionToLeader.refresh.interval.ms";
+  public static final String PARTITION_TO_LEADER_REFRESH_INTERVAL_MS_DOC = "The interval in ms to find partition-leader mapping";
+
   static {
     CONFIG = new ConfigDef().define(ZOOKEEPER_CONNECT_CONFIG,
                                     ConfigDef.Type.STRING,
@@ -78,7 +81,12 @@ public class ConsumeServiceConfig extends AbstractConfig {
                                     ConfigDef.Type.INT,
                                     20000,
                                     ConfigDef.Importance.MEDIUM,
-                                    LATENCY_SLA_MS_DOC);
+                                    LATENCY_SLA_MS_DOC)
+                            .define(PARTITION_TO_LEADER_REFRESH_INTERVAL_MS_CONFIG,
+                                ConfigDef.Type.INT,
+                                10000,
+                                ConfigDef.Importance.MEDIUM,
+                                PARTITION_TO_LEADER_REFRESH_INTERVAL_MS_DOC);
 
   }
 

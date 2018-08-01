@@ -79,6 +79,7 @@ public class ConsumeService implements Service {
   private final int _intervalPartitionLeaderExecutor;
   private final ScheduledExecutorService _handlePartitionLeaderInfoExecutor;
   private final Map<Integer, Broker> _partitionToBroker;
+  private final ZkUtils _zkUtils;
 
   public ConsumeService(Map<String, Object> props, String name) throws Exception {
     _name = name;
@@ -101,6 +102,8 @@ public class ConsumeService implements Service {
         throw new ConfigException("Override must not contain " + property + " config.");
       }
     }
+
+    _zkUtils = ZkUtils.apply(_zkConnect, ZK_SESSION_TIMEOUT_MS, ZK_CONNECTION_TIMEOUT_MS, JaasUtils.isZkSecurityEnabled());
 
     _handlePartitionLeaderInfoExecutor = Executors.newSingleThreadScheduledExecutor(new HandlePartitionLeaderInfoThreadFactory());
 
@@ -229,6 +232,7 @@ public class ConsumeService implements Service {
     if (_running.compareAndSet(true, false)) {
       try {
         _handlePartitionLeaderInfoExecutor.shutdown();
+        _zkUtils.close();
         _consumer.close();
       } catch (Exception e) {
         LOG.warn(_name + "/ConsumeService while trying to close consumer.", e);
@@ -239,6 +243,11 @@ public class ConsumeService implements Service {
 
   @Override
   public void awaitShutdown() {
+    try {
+      _handlePartitionLeaderInfoExecutor.awaitTermination(10, TimeUnit.SECONDS);
+    } catch (InterruptedException e) {
+      LOG.warn(_name + "/ConsumeService could not stop partition leader info executor in time.", e);
+    }
     LOG.info("{}/ConsumeService shutdown completed", _name);
   }
 
@@ -254,17 +263,16 @@ public class ConsumeService implements Service {
 
     @Override
     public void run() {
-      ZkUtils zkUtils = ZkUtils.apply(_zkConnect, ZK_SESSION_TIMEOUT_MS, ZK_CONNECTION_TIMEOUT_MS, JaasUtils.isZkSecurityEnabled());
       scala.collection.mutable.ArrayBuffer<String> topicList = new scala.collection.mutable.ArrayBuffer<>();
       topicList.$plus$eq(_topic);
       scala.collection.Map<Object, scala.collection.Seq<Object>> partitionAssignments =
-          zkUtils.getPartitionAssignmentForTopics(topicList).apply(_topic);
+          _zkUtils.getPartitionAssignmentForTopics(topicList).apply(_topic);
       scala.collection.Iterator<scala.Tuple2<Object, scala.collection.Seq<Object>>> it = partitionAssignments.iterator();
       while (it.hasNext()) {
         scala.Tuple2<Object, scala.collection.Seq<Object>> scalaTuple = it.next();
         Integer partition = (Integer) scalaTuple._1();
-        scala.Option<Object> leaderOption = zkUtils.getLeaderForPartition(_topic, partition);
-        Broker broker = zkUtils.getBrokerInfo((Integer) leaderOption.get()).get();
+        scala.Option<Object> leaderOption = _zkUtils.getLeaderForPartition(_topic, partition);
+        Broker broker = _zkUtils.getBrokerInfo((Integer) leaderOption.get()).get();
         _partitionToBroker.put(partition, broker);
       }
     }

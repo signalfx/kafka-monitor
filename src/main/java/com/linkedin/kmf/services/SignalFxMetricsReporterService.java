@@ -139,9 +139,6 @@ public class SignalFxMetricsReporterService implements Service {
         if (parts.length < 2 || !parts[1].contains("cluster-monitor")) {
           continue;
         }
-        if (metric.contains("broker")) {
-          LOG.info("Metric : {}", attributeValue.toString());
-        }
         setMetricValue(attributeValue);
       }
     }

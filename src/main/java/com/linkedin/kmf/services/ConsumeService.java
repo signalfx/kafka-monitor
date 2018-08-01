@@ -209,11 +209,17 @@ public class ConsumeService implements Service {
       }
 
       Broker broker = _partitionToBroker.get(partition);
-      Collection<Tuple2<SecurityProtocol, EndPoint>> endPoints = scala.collection.JavaConversions.asJavaCollection(broker.endPoints());
-      for (Tuple2<SecurityProtocol, EndPoint> tuple : endPoints) {
-        String brokerUrl = tuple._2.host() + ":" + tuple._2.port();
-        Sensor delay = _sensors.getOrCreateBrokerSensor(brokerUrl);
-        delay.record(currMs - prevMs);
+      // We may not have established partition to broker mappings yet.
+      if (broker != null) {
+        Collection<Tuple2<SecurityProtocol, EndPoint>> endPoints = scala.collection.JavaConversions
+            .asJavaCollection(broker.endPoints());
+        for (Tuple2<SecurityProtocol, EndPoint> tuple : endPoints) {
+          String brokerUrl = tuple._2.host() + ":" + tuple._2.port();
+          Sensor delay = _sensors.getOrCreateBrokerSensor(brokerUrl);
+          delay.record(currMs - prevMs);
+        }
+      } else {
+        LOG.info("No leader found for partition : {}",  partition);
       }
     }
   }
@@ -222,7 +228,8 @@ public class ConsumeService implements Service {
   public synchronized void start() {
     if (_running.compareAndSet(false, true)) {
       _thread.start();
-      _handlePartitionLeaderInfoExecutor.scheduleWithFixedDelay(new PartitionLeaderInfoHandler(), 1000, _intervalPartitionLeaderExecutor, TimeUnit.MILLISECONDS);
+      _handlePartitionLeaderInfoExecutor.scheduleWithFixedDelay(new PartitionLeaderInfoHandler(), 0,
+          _intervalPartitionLeaderExecutor, TimeUnit.MILLISECONDS);
       LOG.info("{}/ConsumeService started", _name);
     }
   }
@@ -267,6 +274,10 @@ public class ConsumeService implements Service {
       topicList.$plus$eq(_topic);
       scala.collection.Map<Object, scala.collection.Seq<Object>> partitionAssignments =
           _zkUtils.getPartitionAssignmentForTopics(topicList).apply(_topic);
+      if (partitionAssignments == null || partitionAssignments.isEmpty()) {
+        return;
+      }
+
       scala.collection.Iterator<scala.Tuple2<Object, scala.collection.Seq<Object>>> it = partitionAssignments.iterator();
       while (it.hasNext()) {
         scala.Tuple2<Object, scala.collection.Seq<Object>> scalaTuple = it.next();
